@@ -109,6 +109,9 @@ main{padding:16px 16px 8px;}
 .period-btn{margin-top:14px;width:100%;padding:12px;border-radius:13px;border:1.5px solid var(--menstrual);color:var(--menstrual);font-weight:700;font-size:14.5px;background:#fff;display:flex;align-items:center;justify-content:center;gap:8px;}
 .period-btn.on{background:var(--menstrual);color:#fff;}
 .period-btn:active{transform:scale(.98);}
+.cycle-adjust{margin-top:8px;width:100%;padding:9px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-weight:600;font-size:12.5px;}
+.cycle-adjust:active{transform:scale(.98);}
+.phase-sub{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 8px;}
 .phase-picker{display:flex;gap:7px;margin-top:12px;}
 .phase-opt{flex:1;padding:9px 4px;border-radius:11px;border:1.5px solid var(--line);background:#fff;font-size:11.5px;font-weight:600;text-align:center;color:var(--ink-soft);line-height:1.15;}
 .phase-opt .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-bottom:3px;}
@@ -247,6 +250,8 @@ nav.tabs{
           </div>
         </div>
         <button class="period-btn" id="periodBtn">🩸 Hoy empezó el período</button>
+        <button class="cycle-adjust" id="adjustCycleBtn">Ajustar día del ciclo</button>
+        <div class="phase-sub">Ajuste manual (solo este día)</div>
         <div class="phase-picker" id="phasePicker"></div>
         <div class="phase-hint" id="phaseHint"></div>
       </div>
@@ -588,7 +593,11 @@ function renderCycleCard(){
     const sel = pf&&pf.phase===p.id;
     return `<button class="phase-opt ${sel?"sel":""}" data-phase="${p.id}"><span class="dot" style="background:${p.color}"></span>${p.short}</button>`;
   }).join("");
-  document.getElementById("phaseHint").textContent = log.phase?"Fase fijada manualmente. Tocala de nuevo para volver al cálculo automático.":"La fase se calcula sola desde tu período. Podés ajustarla a mano.";
+  let hint;
+  if(log.phase) hint="Fase fijada a mano solo para este día. Tocala de nuevo para volver al automático.";
+  else if(pf && pf.day) hint="Se calcula sola desde el inicio de tu período y avanza cada día. No hace falta tocar nada.";
+  else hint="Marcá 🩸 cuando empiece tu período, o tocá \u201cAjustar día del ciclo\u201d para anclarlo ahora.";
+  document.getElementById("phaseHint").textContent = hint;
 
   document.getElementById("phasePicker").querySelectorAll(".phase-opt").forEach(b=>b.addEventListener("click",()=>{
     const l=getLog(cursor);
@@ -813,6 +822,18 @@ document.getElementById("prevDay").onclick=()=>{ cursor=addDays(cursor,-1); rend
 document.getElementById("nextDay").onclick=()=>{ if(cursor<todayStr()){ cursor=addDays(cursor,1); renderHoy(); } };
 document.getElementById("jumpToday").onclick=()=>{ cursor=todayStr(); renderHoy(); };
 document.getElementById("periodBtn").onclick=()=>{ const l=getLog(cursor); l.start=!l.start; save(); renderCycleCard(); };
+document.getElementById("adjustCycleBtn").onclick=()=>{
+  const L=state.cycle.avgLength||28;
+  const actual=(phaseForDate(cursor)||{}).day||"";
+  const ans=prompt("¿En qué día de tu ciclo estás hoy?\n(1 = primer día del período)", actual);
+  if(ans===null) return;
+  const n=parseInt(ans,10);
+  if(!(n>=1 && n<=L+7)){ toast("Poné un número entre 1 y "+(L+7)); return; }
+  const startDate=addDays(cursor, -(n-1));   // deduce el día 1 del ciclo
+  getLog(startDate).start=true;              // ancla que reusa el cálculo automático
+  getLog(cursor).phase=null;                 // saca el override manual para que mande el automático
+  save(); renderCycleCard(); toast("Ciclo anclado en el día "+n);
+};
 document.getElementById("addHabitBtn").onclick=()=>openHabitSheet(null);
 document.getElementById("saveHabit").onclick=saveHabitFromSheet;
 document.getElementById("deleteHabit").onclick=deleteCurrentHabit;
