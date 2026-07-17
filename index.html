@@ -63,13 +63,6 @@ header.top{
 .top .sub{color:var(--ink-soft);font-size:13.5px;margin-top:1px;text-transform:capitalize;}
 .icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--card);border:1px solid var(--line);font-size:18px;}
 .icon-btn:active{transform:scale(.94);}
-.top-actions{display:flex;align-items:center;gap:8px;}
-.sync-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink-soft);padding:8px 11px;border-radius:999px;background:var(--card);border:1px solid var(--line);}
-.sync-dot{width:8px;height:8px;border-radius:50%;background:#B4AEA2;flex:0 0 auto;}
-.sync-pill.ok .sync-dot{background:var(--green);}
-.sync-pill.syncing .sync-dot{background:var(--ovulacion);animation:pulse 1s infinite;}
-.sync-pill.offline .sync-dot{background:var(--clay);}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
 main{padding:16px 16px 8px;}
 .hidden{display:none !important;}
@@ -225,10 +218,7 @@ nav.tabs{
         <h1 class="display" id="pageTitle">Hoy</h1>
         <div class="sub" id="pageSub"></div>
       </div>
-      <div class="top-actions">
-        <button class="sync-pill" id="syncPill" aria-label="Estado de sincronización"><span class="sync-dot"></span><span id="syncTxt">…</span></button>
-        <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
-      </div>
+      <button class="icon-btn" id="menuBtn" aria-label="Menú">⋯</button>
     </div>
   </header>
 
@@ -352,13 +342,10 @@ nav.tabs{
 "use strict";
 
 /* ============ CONFIG ============ */
-/* Pegá acá la URL del Web App de Apps Script (termina en /exec).
-   Si la dejás vacía, la app funciona 100% local (solo en este dispositivo). */
-const API_URL = "https://script.google.com/macros/s/AKfycbwGQcmFfR6Dr2oFAz6sXhq5xX3jz5_EIaotSpkxz94CGillZ4z0TpgEwiBgMkKCJ-8d/exec";
-
-/* ============ estado ============ */
+/* ============ estado ============
+   App 100% local: todo vive en este dispositivo (localStorage).
+   Backup manual desde el menú (⋯) con Exportar / Importar. */
 const CACHE_KEY = "habitos.v2.cache";
-const QUEUE_KEY = "habitos.v2.queue";
 const EMOJIS = ["✅","🏃","💧","🧘","📚","💤","🥗","🚭","🧠","🙏","💪","🎧","✍️","☀️","🌙","🚶","🧴","🦷","💊","📵","🎨","🎸","💰","🧹","🐱","☕","🚿","🌿"];
 const COLORS = ["#5B7B6F","#7C5A6E","#BE7B49","#4E6E8E","#8A6D3B","#986C8E"];
 const PHASES = [
@@ -394,7 +381,7 @@ function normalize(d){
   return Object.assign(structuredClone(DEFAULT), d, {cycle:Object.assign({},DEFAULT.cycle,d.cycle||{})});
 }
 function saveCache(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(state)); }catch(e){} }
-function save(){ saveCache(); }   // guarda en cache local (offline)
+function save(){ saveCache(); }   // guarda en el dispositivo
 
 /* ============ fechas ============ */
 function todayStr(){ return toStr(new Date()); }
@@ -567,7 +554,7 @@ function renderHoy(){
     const ns = cur.s===s ? null : s;
     l.h[hid]={s:ns, note:cur.note||""};
     if(!ns && !l.h[hid].note) delete l.h[hid];
-    save(); queueOp("upsertLog",{date:cursor,habitId:hid,state:ns,note:cur.note||""}); renderHoy();
+    save(); renderHoy();
   }));
   list.querySelectorAll(".note-toggle").forEach(btn=>btn.addEventListener("click",()=>{
     document.querySelector(`[data-notewrap="${btn.dataset.note}"]`).classList.toggle("hidden");
@@ -577,7 +564,7 @@ function renderHoy(){
       const hid=ta.dataset.noteinput; const l=getLog(cursor); const cur=l.h[hid]||{s:null};
       cur.note=ta.value; l.h[hid]=cur;
       if(!cur.s && !cur.note){ delete l.h[hid]; }
-      save(); debounceLog(hid, cursor);
+      save();
     });
   });
 
@@ -606,7 +593,7 @@ function renderCycleCard(){
   document.getElementById("phasePicker").querySelectorAll(".phase-opt").forEach(b=>b.addEventListener("click",()=>{
     const l=getLog(cursor);
     l.phase = l.phase===b.dataset.phase ? null : b.dataset.phase;
-    save(); queueOp("upsertDay",{date:cursor,start:!!l.start,phase:l.phase||null}); renderCycleCard();
+    save(); renderCycleCard();
   }));
 }
 
@@ -698,7 +685,7 @@ function moveUp(id){
   if(i<=0) return;
   const a=all[i], b=all[i-1];
   const tmp=a.order; a.order=b.order; b.order=tmp;
-  save(); queueOp("upsertHabit",a); queueOp("upsertHabit",b); renderHabitos();
+  save(); renderHabitos();
 }
 
 /* ============ anillo de fase (SVG) ============ */
@@ -770,7 +757,7 @@ function saveHabitFromSheet(){
     hObj={id:"h"+Date.now()+Math.floor(Math.random()*999), name, emoji:sheetSel.emoji, color:sheetSel.color, createdAt:todayStr(), archived:false, order:maxOrder+1};
     state.habits.push(hObj);
   }
-  save(); queueOp("upsertHabit",hObj); closeSheet("habitSheet"); render();
+  save(); closeSheet("habitSheet"); render();
 }
 function deleteCurrentHabit(){
   if(!editingHabitId) return;
@@ -778,7 +765,7 @@ function deleteCurrentHabit(){
   const delId=editingHabitId;
   state.habits=state.habits.filter(h=>h.id!==delId);
   for(const s in state.logs){ if(state.logs[s].h) delete state.logs[s].h[delId]; }
-  save(); queueOp("deleteHabit",{id:delId}); closeSheet("habitSheet"); render();
+  save(); closeSheet("habitSheet"); render();
 }
 
 /* ============ sheets util ============ */
@@ -801,7 +788,7 @@ function importData(file){
       const d=JSON.parse(rd.result);
       if(!d.habits||!d.logs) throw 0;
       state=normalize(d);
-      save(); queueOp("replaceAll",{state:state}); closeSheet("menuSheet"); currentTab="hoy"; cursor=todayStr(); render();
+      save(); closeSheet("menuSheet"); currentTab="hoy"; cursor=todayStr(); render();
       toast("Datos importados");
     }catch(e){ toast("Archivo inválido"); }
   };
@@ -825,7 +812,7 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{ cu
 document.getElementById("prevDay").onclick=()=>{ cursor=addDays(cursor,-1); renderHoy(); };
 document.getElementById("nextDay").onclick=()=>{ if(cursor<todayStr()){ cursor=addDays(cursor,1); renderHoy(); } };
 document.getElementById("jumpToday").onclick=()=>{ cursor=todayStr(); renderHoy(); };
-document.getElementById("periodBtn").onclick=()=>{ const l=getLog(cursor); l.start=!l.start; save(); queueOp("upsertDay",{date:cursor,start:!!l.start,phase:l.phase||null}); renderCycleCard(); };
+document.getElementById("periodBtn").onclick=()=>{ const l=getLog(cursor); l.start=!l.start; save(); renderCycleCard(); };
 document.getElementById("addHabitBtn").onclick=()=>openHabitSheet(null);
 document.getElementById("saveHabit").onclick=saveHabitFromSheet;
 document.getElementById("deleteHabit").onclick=deleteCurrentHabit;
@@ -833,15 +820,15 @@ document.getElementById("menuBtn").onclick=()=>{ refreshMenu(); openSheet("menuS
 document.getElementById("miExport").onclick=exportData;
 document.getElementById("miImport").onclick=()=>document.getElementById("fileInput").click();
 document.getElementById("fileInput").onchange=e=>{ if(e.target.files[0]) importData(e.target.files[0]); };
-document.getElementById("miReset").onclick=()=>{ if(confirm("¿Borrar TODOS los hábitos y registros? No se puede deshacer.")){ state=structuredClone(DEFAULT); save(); queueOp("replaceAll",{state:state}); closeSheet("menuSheet"); currentTab="hoy"; render(); } };
-document.getElementById("miToggleCycle").onclick=()=>{ state.cycle.enabled=!state.cycle.enabled; save(); queueOp("setSetting",{key:"enabled",value:state.cycle.enabled}); refreshMenu(); render(); };
+document.getElementById("miReset").onclick=()=>{ if(confirm("¿Borrar TODOS los hábitos y registros? No se puede deshacer.")){ state=structuredClone(DEFAULT); save(); closeSheet("menuSheet"); currentTab="hoy"; render(); } };
+document.getElementById("miToggleCycle").onclick=()=>{ state.cycle.enabled=!state.cycle.enabled; save(); refreshMenu(); render(); };
 document.getElementById("miCycleLen").onclick=()=>{
   const a=prompt("Duración promedio del ciclo (días):", state.cycle.avgLength); if(a===null) return;
   const p=prompt("Duración del período (días):", state.cycle.periodLength); if(p===null) return;
   const av=parseInt(a), pe=parseInt(p);
   if(av>=20&&av<=45) state.cycle.avgLength=av;
   if(pe>=1&&pe<=10) state.cycle.periodLength=pe;
-  save(); queueOp("setSetting",{key:"avgLength",value:state.cycle.avgLength}); queueOp("setSetting",{key:"periodLength",value:state.cycle.periodLength}); refreshMenu(); render(); toast("Ciclo actualizado");
+  save(); refreshMenu(); render(); toast("Ciclo actualizado");
 };
 function refreshMenu(){
   document.getElementById("miCycleLenVal").textContent=`${state.cycle.avgLength} días · período ${state.cycle.periodLength} días`;
@@ -850,76 +837,8 @@ function refreshMenu(){
 // cerrar sheet tocando el fondo
 document.querySelectorAll(".sheet-bg").forEach(bg=>bg.addEventListener("click",e=>{ if(e.target===bg) bg.classList.remove("open"); }));
 
-/* ============ sincronización con Apps Script ============ */
-const REMOTE = !!API_URL && /\/exec$/.test(API_URL);
-let syncing=false;
-const _logTimers={};
-
-function setStatus(s){
-  const pill=document.getElementById("syncPill"), txt=document.getElementById("syncTxt");
-  if(!pill) return;
-  pill.style.display = REMOTE ? "" : "none";
-  pill.className = "sync-pill "+s;
-  txt.textContent = !REMOTE ? "Local" : (s==="ok"?"Sincronizado":s==="syncing"?"Sincronizando…":s==="offline"?"Sin conexión":"Local");
-}
-function loadQueue(){ try{ return JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){ return []; } }
-function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }catch(e){} }
-function queueOp(op,payload){
-  if(!REMOTE) return;
-  const q=loadQueue(); q.push({op,payload}); saveQueue(q);
-  flushQueue();
-}
-async function api(action,payload){
-  const body=JSON.stringify(Object.assign({action},payload||{}));
-  const res=await fetch(API_URL,{method:"POST",body,redirect:"follow"}); // text/plain: evita preflight CORS
-  return res.json();
-}
-async function flushQueue(){
-  if(!REMOTE || syncing) return;
-  if(!navigator.onLine){ setStatus("offline"); return; }
-  syncing=true; setStatus("syncing");
-  try{
-    let q=loadQueue();
-    while(q.length){
-      const it=q[0];
-      const r=await api(it.op, it.payload);
-      if(r && r.error) throw new Error(r.error);
-      q.shift(); saveQueue(q);
-    }
-    setStatus("ok");
-  }catch(e){ setStatus("offline"); }
-  finally{ syncing=false; }
-}
-async function pullState(){
-  if(!REMOTE) return;
-  try{
-    setStatus("syncing");
-    const res=await fetch(API_URL+"?action=get",{redirect:"follow"});
-    const d=await res.json();
-    if(d && d.habits){ state=normalize(d); saveCache(); render(); }
-    setStatus("ok");
-  }catch(e){ setStatus("offline"); }
-}
-async function sync(){
-  if(!REMOTE){ setStatus("local"); return; }
-  await flushQueue();
-  if(loadQueue().length===0) await pullState();   // solo bajo del server si ya subí todo lo pendiente
-}
-function debounceLog(hid,date){
-  const k=date+"|"+hid;
-  clearTimeout(_logTimers[k]);
-  _logTimers[k]=setTimeout(()=>{
-    const e=(state.logs[date] && state.logs[date].h || {})[hid] || {s:null,note:""};
-    queueOp("upsertLog",{date,habitId:hid,state:e.s||null,note:e.note||""});
-  },700);
-}
-window.addEventListener("online", sync);
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden) sync(); });
-
 /* ============ init ============ */
 render();
-setStatus(REMOTE?"syncing":"local");
-sync();
 </script>
 </body>
 </html>
