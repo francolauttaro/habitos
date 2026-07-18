@@ -112,6 +112,21 @@ main{padding:16px 16px 8px;}
 .cycle-adjust{margin-top:8px;width:100%;padding:9px;border-radius:11px;border:1px solid var(--line);background:var(--card);color:var(--ink-soft);font-weight:600;font-size:12.5px;}
 .cycle-adjust:active{transform:scale(.98);}
 .phase-sub{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:16px 0 8px;}
+.mood-card{padding:16px;}
+.mood-block + .mood-block{margin-top:18px;}
+.mb-title{font-size:13px;font-weight:700;margin-bottom:10px;}
+.mood-row{display:flex;gap:7px;}
+.mood-opt{flex:1;padding:9px 3px;border-radius:12px;border:1.5px solid var(--line);background:#fff;text-align:center;line-height:1.1;}
+.mood-opt:active{transform:scale(.94);}
+.mood-opt .me{font-size:21px;display:block;}
+.mood-opt .ml{font-size:10px;font-weight:600;color:var(--ink-soft);margin-top:3px;}
+.mood-opt.sel{border-color:var(--ink);background:var(--paper);}
+.mood-opt.sel .ml{color:var(--ink);}
+.energy-row{display:flex;gap:7px;}
+.energy-opt{flex:1;padding:12px 3px;border-radius:12px;border:1.5px solid var(--line);background:#fff;text-align:center;font-weight:800;font-size:15px;color:var(--ink-soft);}
+.energy-opt:active{transform:scale(.94);}
+.energy-opt.sel{border-color:var(--green);background:var(--green);color:#fff;}
+.energy-cap{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:9px;min-height:14px;}
 .phase-picker{display:flex;gap:7px;margin-top:12px;}
 .phase-opt{flex:1;padding:9px 4px;border-radius:11px;border:1.5px solid var(--line);background:#fff;font-size:11.5px;font-weight:600;text-align:center;color:var(--ink-soft);line-height:1.15;}
 .phase-opt .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-bottom:3px;}
@@ -153,7 +168,7 @@ main{padding:16px 16px 8px;}
 .ring-center{font-weight:800;}
 .phasebars{padding:6px 16px 18px;}
 .pbar-row{display:flex;align-items:center;gap:10px;margin-top:11px;font-size:13px;}
-.pbar-row .lbl{width:78px;flex:0 0 auto;display:flex;align-items:center;gap:6px;}
+.pbar-row .lbl{width:88px;flex:0 0 auto;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;font-size:12.5px;}
 .pbar-row .lbl .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
 .pbar-track{flex:1;height:9px;border-radius:5px;background:var(--paper);overflow:hidden;border:1px solid var(--line);}
 .pbar-fill{height:100%;border-radius:5px;}
@@ -255,6 +270,19 @@ nav.tabs{
         <div class="phase-picker" id="phasePicker"></div>
         <div class="phase-hint" id="phaseHint"></div>
       </div>
+
+      <div class="section-label" id="moodLabel">Ánimo y energía</div>
+      <div class="card mood-card" id="moodCard">
+        <div class="mood-block">
+          <div class="mb-title">¿Cómo estuvo tu ánimo?</div>
+          <div class="mood-row" id="moodRow"></div>
+        </div>
+        <div class="mood-block">
+          <div class="mb-title">¿Y tu energía?</div>
+          <div class="energy-row" id="energyRow"></div>
+          <div class="energy-cap" id="energyCap"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ===== PROGRESO ===== -->
@@ -280,6 +308,9 @@ nav.tabs{
         <div class="ringbox" id="bigRing"></div>
         <div class="phasebars" id="phaseBars"></div>
       </div>
+
+      <div class="section-label" id="moodDashLabel">Ánimo, energía y hábitos</div>
+      <div class="card" id="moodEnergyBars"></div>
     </section>
 
     <!-- ===== HÁBITOS ===== -->
@@ -360,6 +391,16 @@ const PHASES = [
   {id:"lutea",     name:"Lútea",     short:"Lútea",     color:"var(--lutea)"}
 ];
 const PHASE_HEX = {menstrual:"#A24B5E", folicular:"#6FA292", ovulacion:"#D79A3E", lutea:"#9A7EA0"};
+const MOODS = [
+  {id:"genial",    emoji:"😄", label:"Genial",    color:"#5B9A7F"},
+  {id:"bien",      emoji:"🙂", label:"Bien",      color:"#6FA292"},
+  {id:"normal",    emoji:"😐", label:"Normal",    color:"#A9A08F"},
+  {id:"baja",      emoji:"😔", label:"Baja",      color:"#7E86B0"},
+  {id:"irritable", emoji:"😤", label:"Irritable", color:"#C0765A"}
+];
+const ENERGY = [
+  {v:1, label:"Muy baja"}, {v:2, label:"Baja"}, {v:3, label:"Media"}, {v:4, label:"Alta"}, {v:5, label:"Muy alta"}
+];
 
 const DEFAULT = {
   version:1,
@@ -499,6 +540,22 @@ function completionByPhase(){
   }
   return acc;
 }
+function completionByKey(kind){   // kind: "mood" | "energy"
+  const acc={};
+  for(const s in state.logs){
+    const l=state.logs[s];
+    const key = kind==="mood" ? (l.mood||null) : (l.energy||null);
+    if(!key) continue;
+    for(const h of activeHabits(s)){
+      const e=l.h[h.id];
+      if(e && (e.s==="done"||e.s==="fail")){
+        if(!acc[key]) acc[key]=[0,0];
+        acc[key][1]++; if(e.s==="done") acc[key][0]++;
+      }
+    }
+  }
+  return acc;
+}
 
 /* ============ render ============ */
 function render(){
@@ -513,7 +570,11 @@ function render(){
   const cyOn = state.cycle.enabled;
   document.getElementById("cycleLabel").style.display=cyOn?"":"none";
   document.querySelector("#view-hoy .cycle-card").style.display=cyOn?"":"none";
+  document.getElementById("moodLabel").style.display=cyOn?"":"none";
+  document.getElementById("moodCard").style.display=cyOn?"":"none";
   document.getElementById("cycleDashLabel").style.display=cyOn?"":"none";
+  document.getElementById("moodDashLabel").style.display=cyOn?"":"none";
+  document.getElementById("moodEnergyBars").style.display=cyOn?"":"none";
 
   if(currentTab==="hoy") renderHoy();
   if(currentTab==="progreso") renderProgreso();
@@ -574,6 +635,33 @@ function renderHoy(){
   });
 
   renderCycleCard();
+  renderMoodCard();
+}
+
+function renderMoodCard(){
+  if(!state.cycle.enabled) return;
+  const log=getLog(cursor);
+  document.getElementById("moodRow").innerHTML=MOODS.map(m=>{
+    const sel=log.mood===m.id;
+    return `<button class="mood-opt ${sel?"sel":""}" data-mood="${m.id}"><span class="me">${m.emoji}</span><span class="ml">${m.label}</span></button>`;
+  }).join("");
+  document.getElementById("energyRow").innerHTML=ENERGY.map(e=>{
+    const sel=log.energy===e.v;
+    return `<button class="energy-opt ${sel?"sel":""}" data-energy="${e.v}">${e.v}</button>`;
+  }).join("");
+  const en=ENERGY.find(e=>e.v===log.energy);
+  document.getElementById("energyCap").textContent = en?("Energía "+en.label.toLowerCase()):"Tocá un nivel de 1 (muy baja) a 5 (muy alta)";
+
+  document.getElementById("moodRow").querySelectorAll(".mood-opt").forEach(b=>b.addEventListener("click",()=>{
+    const l=getLog(cursor);
+    l.mood = l.mood===b.dataset.mood ? null : b.dataset.mood;
+    save(); renderMoodCard();
+  }));
+  document.getElementById("energyRow").querySelectorAll(".energy-opt").forEach(b=>b.addEventListener("click",()=>{
+    const l=getLog(cursor), v=Number(b.dataset.energy);
+    l.energy = l.energy===v ? null : v;
+    save(); renderMoodCard();
+  }));
 }
 
 function renderCycleCard(){
@@ -655,6 +743,29 @@ function renderProgreso(){
         </div>`;
       }).join("")+
       '<div class="phase-hint" style="margin-top:14px">Comparás qué porcentaje de hábitos cumplís en cada fase del ciclo.</div>';
+
+    const accM=completionByKey("mood");
+    const moodRows=MOODS.map(m=>{
+      const a=accM[m.id], tot=a?a[1]:0, pct=tot?Math.round(a[0]/tot*100):0;
+      return `<div class="pbar-row">
+        <div class="lbl">${m.emoji} ${m.label}</div>
+        <div class="pbar-track"><div class="pbar-fill" style="width:${tot?pct:0}%;background:${m.color}"></div></div>
+        <div class="pv">${tot?`<b class="num">${pct}%</b>`:"—"}</div>
+      </div>`;
+    }).join("");
+    const accE=completionByKey("energy");
+    const energyRows=ENERGY.map(e=>{
+      const a=accE[e.v], tot=a?a[1]:0, pct=tot?Math.round(a[0]/tot*100):0;
+      return `<div class="pbar-row">
+        <div class="lbl"><span class="dot" style="background:var(--green)"></span>Nivel ${e.v}</div>
+        <div class="pbar-track"><div class="pbar-fill" style="width:${tot?pct:0}%;background:var(--green)"></div></div>
+        <div class="pv">${tot?`<b class="num">${pct}%</b>`:"—"}</div>
+      </div>`;
+    }).join("");
+    document.getElementById("moodEnergyBars").innerHTML=
+      '<div class="phasebars" style="padding:16px 16px 6px"><div class="section-label" style="margin:0">Cumplimiento por ánimo</div>'+moodRows+
+      '<div class="section-label" style="margin:18px 0 0">Cumplimiento por energía</div>'+energyRows+
+      '<div class="phase-hint" style="margin-top:14px">Ves en qué ánimo y con qué energía cumplís más. Necesita varios días cargados para que sea representativo.</div></div>';
   }
 }
 
